@@ -1,0 +1,14 @@
+{
+  "name": "cheztui",
+  "owner": {
+    "name": "John Foland",
+    "email": "john@johnfoland.net"
+  },
+  "plugins": [
+    {
+      "name": "cheztui",
+      "source": "./",
+      "description": "Agent skill for cheztui: safe, previewed edits to chezmoi-managed dotfiles."
+    }
+  ]
+}

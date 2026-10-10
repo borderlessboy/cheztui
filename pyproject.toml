@@ -1,0 +1,69 @@
+[project]
+name = "cheztui"
+version = "0.0.0"
+description = "A clean, fast TUI for chezmoi: see what drifted, which side changed, and fix it with one key."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "John Foland", email = "john@johnfoland.net" }]
+requires-python = ">=3.11"
+dependencies = [
+    "textual>=8,<9",
+    "tomlkit>=0.13",
+]
+keywords = ["chezmoi", "dotfiles", "terminal", "tui", "agents"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Terminals",
+]
+
+[project.urls]
+Homepage = "https://github.com/chocs-cat/cheztui"
+Changelog = "https://github.com/chocs-cat/cheztui/blob/master/CHANGELOG.md"
+Issues = "https://github.com/chocs-cat/cheztui/issues"
+
+[project.scripts]
+cheztui = "cheztui.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cheztui"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "skills", "README.md", "CHANGELOG.md", "LICENSE"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "ty==0.0.84",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "PT", "C4", "PERF", "PTH"]
+# Textual's BINDINGS / CSS class attributes are lists by convention.
+ignore = ["RUF012"]

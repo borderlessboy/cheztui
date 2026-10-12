@@ -29,7 +29,7 @@ from cheztui.git import GitError, GitFailed
 from cheztui.runner import Runner, run_subprocess
 from cheztui.secrets import Masker
 from cheztui.tui import keys
-from cheztui.tui.views.base import ListDetail
+from cheztui.tui.views.base import Detail, ListDetail, RowList
 from cheztui.tui.views.drift import DriftView
 
 THEMES = frozenset(BUILTIN_THEMES)  # the themes `ui.theme` may name (spec §9)
@@ -77,6 +77,7 @@ class CheztuiApp(App[None]):
     #list-message { padding: 0 1; height: auto; display: none; }
     .-no-rows RowList { display: none; }
     .-no-rows #list-message { display: block; }
+    #filter { display: none; }
     #log-line { height: 1; padding: 0 1; }
     #key-bar { height: 1; padding: 0 1; }
     """
@@ -128,6 +129,11 @@ class CheztuiApp(App[None]):
         narrow = width < self.settings.ui.narrow_breakpoint
         for panes in self.query("#panes"):
             panes.set_class(narrow, "-narrow")
+        # `tab` works only when stacked, so only then can the detail hold focus (spec §4).
+        for detail in self.query(Detail):
+            detail.can_focus = narrow
+            if not narrow and detail.has_focus:
+                self.view.query_one(RowList).focus()
 
     @property
     def narrow(self) -> bool:
@@ -173,8 +179,8 @@ class CheztuiApp(App[None]):
         self.query_one("#tabs", Static).update(Content.styled(label, "reverse"))
 
     def key_bar_keys(self) -> list[keys.Key]:
-        """The keys that work now, in order (spec §4 Key bar)."""
-        listed = [*self.view.KEYS, *keys.GLOBAL]
+        """The view's keys that work now, then the global ones in bar order (spec §4 Key bar)."""
+        listed = [*self.view.KEYS, *sorted((k for k in keys.GLOBAL if k.bar), key=lambda k: k.bar)]
         return [k for k in listed if k.label and self._works(k)]
 
     def _works(self, key: keys.Key) -> bool:
@@ -219,7 +225,45 @@ class CheztuiApp(App[None]):
             return self.reading
         if action == "quit":
             return self.screen is self.screen_stack[0]
+        if action in ("filter", "select"):
+            return self.view.has_rows
+        if action == "toggle_focus":
+            return self.narrow
         return True
+
+    # --- The list's keys (spec §4 List, §5 Keys) ---------------------------------
+
+    @property
+    def detail(self) -> Detail:
+        return self.view.query_one(Detail)
+
+    def action_move(self, step: int) -> None:
+        """`j`/`k`: move the current row, or scroll the detail when it has focus."""
+        if self.detail.has_focus:
+            self.detail.scroll_relative(y=step, animate=False)
+        else:
+            self.view.move(step)
+
+    def action_scroll_detail(self, step: int) -> None:
+        self.detail.scroll_relative(y=step, animate=False)
+
+    def action_page_detail(self, step: int) -> None:
+        if step > 0:
+            self.detail.scroll_page_down(animate=False)
+        else:
+            self.detail.scroll_page_up(animate=False)
+
+    def action_filter(self) -> None:
+        self.view.open_filter()
+
+    def action_select(self) -> None:
+        self.view.toggle_selected()
+
+    def action_toggle_focus(self) -> None:
+        if self.detail.has_focus:
+            self.view.query_one(RowList).focus()
+        else:
+            self.detail.focus()
 
     def action_cancel_read(self) -> None:
         """`esc`: cancel the read; the earlier data stays (spec §5)."""

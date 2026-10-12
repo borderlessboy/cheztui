@@ -244,6 +244,31 @@ async def drift(chezmoi: Chezmoi) -> Drift:
     return build_drift(status, managed, templates, encrypted, externals, dump, entry_state, raw)
 
 
+# --- The header's read (spec §4 Frame details, DEC-33) -----------------------
+
+
+@dataclass(frozen=True)
+class RepoState:
+    source_dir: Path
+    branch: str | None  # None when HEAD is detached
+    ahead_behind: tuple[int, int] | None  # None with no upstream or before the first commit
+    uncommitted: int  # porcelain entries in the working tree
+
+
+async def repo_state(chezmoi: Chezmoi, *, git_runner: Runner = run_subprocess) -> RepoState:
+    """Read the header's source, branch, ahead/behind and cleanliness (spec §4).
+
+    `dump-config` first, then git in its `workingTree`, the three git reads
+    at once. Errors propagate unmasked, as `drift()`'s do; front ends mask them.
+    """
+    config = await chezmoi.dump_config()
+    git = Git(git_runner, work_tree=config.working_tree)
+    branch, ahead_behind, stray = await asyncio.gather(
+        git.branch(), git.ahead_behind(), git.porcelain()
+    )
+    return RepoState(config.source_dir, branch, ahead_behind, len(stray))
+
+
 # --- The write path (spec §5 Write flow; DEC-8, DEC-27 to DEC-30) ------------
 
 Action = Literal["apply", "re-add", "forget", "edit", "merge", "add"]

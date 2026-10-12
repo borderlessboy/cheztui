@@ -13,7 +13,8 @@ chezmoi made. A `--json` CLI covers the same ground for scripts and coding
 agents, including `cheztui edit` for safe scripted edits to managed files.
 
 **Status:** early. The read commands `cheztui status` and `cheztui verify`
-work; the TUI is still a placeholder. The design is in
+work, as do `cheztui edit` and `cheztui add` for scripted writes; the TUI
+is still a placeholder. The design is in
 [docs/spec.md](docs/spec.md) and the plan in the
 [milestones](https://github.com/chocs-cat/cheztui/milestones).
 
@@ -24,6 +25,10 @@ cheztui status            # what drifted, which side changed, and the fix
 cheztui status --json     # the same rows as JSON, for scripts and agents
 cheztui verify            # ✓ verify, or ✗ verify and the failing targets (exit 1)
 cheztui verify --json
+cheztui edit ~/.zshrc --ops ops.json --dry-run  # preview source-text changes
+cheztui edit ~/.zshrc --ops ops.json --json     # apply, report the commit, verify
+cheztui add ~/.new-config --dry-run            # preview a new file or directory
+cheztui add ~/.new-config --json               # add, report the commit, verify
 ```
 
 ```
@@ -37,9 +42,21 @@ run    R  ~/install-brew.sh        apply
 that both did, and `run` that a script will run on the next apply. Global
 flags go before the command and are passed to every chezmoi call:
 `-n/--dry-run`, `--chezmoi-config PATH`, `--source PATH`,
-`--destination PATH`. Exit codes: `0` ok, `1` not verified, `2` usage or
+`--destination PATH`. Exit codes: `0` ok, `1` refused, failed or not verified, `2` usage or
 config error, `3` chezmoi missing, too old (cheztui needs 2.60 or later) or
 failing.
+
+`edit` takes one managed regular file and a JSON ops spec (a file, or `--ops -`
+for stdin). It refuses drift unless `--allow-drift` is given, and refuses a
+configured chezmoi `edit.command`. Templates are edited as source text;
+encrypted and `always_mask` diffs are hidden unless `--reveal` is passed.
+With chezmoi auto-commit on, a dirty source tree blocks the edit; with it
+off, stray files produce a warning. See [spec §8](docs/spec.md#8-cheztui-edit-and-the-agent-skill)
+for the ops reference, refusals and JSON contract.
+
+`add` takes one unmanaged file or directory, with `--template` and `--encrypt`
+when needed. It previews the addition and refuses managed paths or directories
+containing managed entries, so adoption cannot overwrite an existing source.
 
 ## Development
 

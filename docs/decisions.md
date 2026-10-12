@@ -268,6 +268,14 @@ nothing, unless the result matches the expected hash, so what lands is what
 the dry run showed. It writes in place, never by rename. `--allow-drift`
 passes `--force`, since applying then overwrites the target's change.
 
+*Amended 2026-10 (#26):* `_editor` runs as the running interpreter's
+`python -P -m cheztui _editor`. Plain `-m` puts the working directory first
+on `sys.path`, and chezmoi runs the editor in the caller's working
+directory, so a `difflib.py` or `json.py` there was imported (and ran) in
+place of the standard library's. `-P` (Python 3.11+, the floor) leaves the
+working directory off the path; `-I` would also drop user site-packages and
+`PYTHONPATH`, which an install may rely on.
+
 *Where:* `docs/spec.md` §8.
 
 ## DEC-19: CLI contracts for v0.1 (2026-10)
@@ -478,3 +486,23 @@ The edit and add procedures (DEC-11, DEC-18, DEC-19) left these open:
   cheztui reports that as a refusal (dry run) or an error (real run).
 
 *Where:* `docs/spec.md` §8 (Command, Ops spec, New files).
+
+## DEC-32: Add reports an outside-destination path as a refusal (2026-10)
+
+Added 2026-10-12 in #26. Spec §8 requires an outside-destination add path
+to be refused by the add dry run, but chezmoi 2.71 rejects that argument
+in the earlier `managed` call. For this input rejection only, read
+`dump-config` to check the effective destination: if the target is outside
+it, continue with the usual pre-flight and add dry run. The dry run's
+masked last error line is then the exit-1 refusal §8 promises. A managed
+read failure for a target inside the destination still propagates as exit
+3 (DEC-25), as does a failed config read. This keeps the planned refusal
+order for valid targets without treating a failed state read as empty.
+
+*Amended 2026-10 (#26):* `cheztui edit` hits the same rejection in its
+step-1 `managed` read. A target outside the destination isn't managed, so
+the same check makes it step 1's exit-1 "isn't managed" refusal rather
+than a fully masked exit 3; inside the destination a failure still
+propagates.
+
+*Where:* `docs/spec.md` §8 (Command, New files).

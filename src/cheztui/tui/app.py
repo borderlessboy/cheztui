@@ -10,13 +10,14 @@ diagnostic is masked before the log line or the session log sees it
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from textual import events
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SuspendNotSupported
 from textual.containers import Horizontal
 from textual.content import Content
 from textual.theme import BUILTIN_THEMES
@@ -24,16 +25,25 @@ from textual.widgets import Static
 
 from cheztui import ops
 from cheztui.chezmoi import Chezmoi, ChezmoiError, ChezmoiFailed
-from cheztui.config import Config
+from cheztui.config import Config, ConfigError, load
 from cheztui.git import GitError, GitFailed
 from cheztui.runner import Runner, run_subprocess
 from cheztui.secrets import Masker
 from cheztui.tui import keys
+from cheztui.tui.screens import HelpScreen, Palette, SessionLogScreen, help_text
+from cheztui.tui.settings import SettingsScreen, launch_editor
 from cheztui.tui.views.base import Detail, ListDetail, RowList
 from cheztui.tui.views.drift import DriftView
 
 THEMES = frozenset(BUILTIN_THEMES)  # the themes `ui.theme` may name (spec §9)
 READING = "reading chezmoi…"
+
+
+def _action_name(action: str) -> str:
+    return action.split("(", 1)[0]
+
+
+_FRAME_ACTIONS = frozenset(_action_name(a) for k in keys.GLOBAL for _, a in k.bindings)
 CANCELLED = "refresh cancelled"
 
 
@@ -93,6 +103,7 @@ class CheztuiApp(App[None]):
         self.git_runner = git_runner
         self.theme = config.ui.theme
         self.now: Callable[[], datetime] = datetime.now  # the session log's clock
+        self.launch_editor: Callable[[Path], None] = launch_editor  # tests replace it
         self.session_log: list[LogEntry] = []
         self.repo: ops.RepoState | None = None
         self.reading = False
@@ -184,9 +195,7 @@ class CheztuiApp(App[None]):
         return [k for k in listed if k.label and self._works(k)]
 
     def _works(self, key: keys.Key) -> bool:
-        action = key.action
-        name = action.split("(", 1)[0]
-        return self.check_action(name, ()) is not False
+        return self.check_action(_action_name(key.action), ()) is not False
 
     def _render_key_bar(self) -> None:
         parts = [
@@ -221,15 +230,66 @@ class CheztuiApp(App[None]):
         self.run_worker(self._read(self._read_id), group="read", exclusive=True)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        # The frame's keys work on the main screen only; help, the palette, the
+        # session log and settings have their own (spec §5).
+        if action in _FRAME_ACTIONS and self.screen is not self.screen_stack[0]:
+            return False
+        return self.available(action)
+
+    def available(self, action: str) -> bool:
+        """Whether a frame action works now, whatever screen is on top."""
         if action == "cancel_read":
             return self.reading
-        if action == "quit":
-            return self.screen is self.screen_stack[0]
         if action in ("filter", "select"):
             return self.view.has_rows
         if action == "toggle_focus":
             return self.narrow
         return True
+
+    @property
+    def palette_keys(self) -> list[keys.Key]:
+        """The palette's entries: the view's, then the global ones, that work now (spec §5)."""
+        listed = [*self.view.KEYS, *keys.GLOBAL]
+        return [k for k in listed if k.palette and self.available(_action_name(k.action))]
+
+    # --- Help, palette, session log, settings (spec §5, §9) ------------------------
+
+    def action_help(self) -> None:
+        view = self.view
+        self.push_screen(HelpScreen(help_text(view.NAME, view.KEYS, keys.GLOBAL)))
+
+    def action_command_palette(self) -> None:
+        if not isinstance(self.screen, Palette):
+            self.push_screen(Palette())
+
+    def action_session_log(self) -> None:
+        self.push_screen(SessionLogScreen(self.session_log))
+
+    def action_settings(self) -> None:
+        self.push_screen(SettingsScreen())
+
+    def apply_settings(self) -> None:
+        """Make the theme and the layout follow the settings at once (spec §9)."""
+        self.theme = self.settings.ui.theme
+        self.update_layout()
+
+    def edit_config(self) -> str | None:
+        """Edit the config file suspended, then reload it; a config error keeps the old one.
+
+        Returns the error's message, or None when the file loaded.
+        """
+        path = self.settings.path
+        with contextlib.ExitStack() as stack:
+            # A headless test run can't suspend; the tests replace the launcher.
+            with contextlib.suppress(SuspendNotSupported):
+                stack.enter_context(self.suspend())
+            self.launch_editor(path)
+        try:
+            self.settings = load(path)
+        except ConfigError as e:
+            return str(e)
+        self.apply_settings()
+        return None
 
     # --- The list's keys (spec §4 List, §5 Keys) ---------------------------------
 

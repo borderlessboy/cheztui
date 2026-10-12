@@ -316,14 +316,14 @@ async def test_key_bar_with_rows(tmp_path):
     app = make_app(FakeChezmoi.drifted(), tmp_path)
     async with app.run_test() as pilot:
         await settled(pilot)
-        assert text(app, "#key-bar") == "space Select  / Filter"
+        assert text(app, "#key-bar") == "space Select  / Filter  ? Help"
 
 
 async def test_key_bar_without_rows(tmp_path):
     app = make_app(FakeChezmoi.in_sync(), tmp_path)
     async with app.run_test() as pilot:
         await settled(pilot)
-        assert text(app, "#key-bar") == ""
+        assert text(app, "#key-bar") == "? Help"
         await pilot.press("slash", "space")
         assert not app.query_one(FilterInput).display
 
@@ -336,4 +336,4 @@ async def test_key_bar_after_a_failure(tmp_path):
         fake.fail("status", b"chezmoi: broke\n", binary="chezmoi")
         await pilot.press("g")
         await settled(pilot)
-        assert text(app, "#key-bar") == ""
+        assert text(app, "#key-bar") == "? Help"

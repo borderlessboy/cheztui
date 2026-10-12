@@ -12,7 +12,7 @@ import pytest
 
 from cheztui import ops
 from cheztui.chezmoi import ChezmoiFailed, ChezmoiUnavailable
-from cheztui.git import GitFailed
+from cheztui.git import GitError, GitFailed
 from tests.conftest import Scratch, requires_chezmoi
 from tests.fake_chezmoi import FakeChezmoi
 from tests.test_ops import fixture_drift
@@ -138,3 +138,21 @@ async def test_a_held_call_waits_for_its_event():
     assert not task.done()
     release.set()
     assert await task == ops.Drift()
+
+
+# --- The shared failure message (spec §4 Log line, §7) ----------------------------
+
+
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        (ChezmoiFailed(("chezmoi",), 1, "a\nchezmoi: last\n\n"), "chezmoi exited 1: chezmoi: last"),
+        (ChezmoiFailed(("chezmoi",), 2, ""), "chezmoi exited 2"),
+        (GitFailed(("git",), 128, "fatal: one\nfatal: two\n"), "git exited 128: fatal: two"),
+        (GitFailed(("git",), 1, " \n"), "git exited 1"),
+        (ChezmoiUnavailable("chezmoi not found"), "chezmoi not found"),
+        (GitError("git not found"), "git not found"),
+    ],
+)
+def test_failure_message(error, message):
+    assert ops.failure_message(error) == message

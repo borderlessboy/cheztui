@@ -455,6 +455,22 @@ def short_error(stderr: str, action: str, returncode: int) -> str:
     return lines[-1].strip() if lines else f"chezmoi {action} exited {returncode}"
 
 
+def failure_message(error: ChezmoiError | GitError) -> str:
+    """A failed read's one-line message (spec §4 Log line, §7).
+
+    The CLI prints it after `cheztui: `, the TUI's log line after `✗ `. A
+    failed command's message ends with its last stderr line.
+    """
+    if isinstance(error, ChezmoiFailed):
+        tool, last = "chezmoi", error.last_line
+    elif isinstance(error, GitFailed):
+        lines = [line for line in error.stderr.splitlines() if line.strip()]
+        tool, last = "git", lines[-1].strip() if lines else ""
+    else:
+        return str(error)
+    return f"{tool} exited {error.returncode}" + (f": {last}" if last else "")
+
+
 async def sanitized(awaitable: Awaitable[_T], masker: Masker | None, *, whole: bool) -> _T:
     """Await a read; a chezmoi or git failure re-raises with its stderr masked (DEC-30).
 

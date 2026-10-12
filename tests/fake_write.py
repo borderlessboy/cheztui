@@ -81,11 +81,18 @@ class FakeWrite:
         if words and words[0] in self.holds:
             await self.holds[words[0]].wait()
 
-    def fail(self, command: str, stderr: bytes, returncode: int = 1) -> None:
-        """Make every chezmoi `command` (or git subcommand) exit non-zero."""
+    def fail(
+        self, command: str, stderr: bytes, returncode: int = 1, *, binary: str | None = None
+    ) -> None:
+        """Make every chezmoi `command` (or git subcommand) exit non-zero.
+
+        `binary` (`chezmoi` or `git`) limits it to one, where both have the command.
+        """
 
         def reply(argv: tuple[str, ...], env: Mapping[str, str] | None) -> Completed | None:
             words = subcommand(argv) if argv[0] == "chezmoi" else argv[3:]
+            if binary not in (None, argv[0]):
+                return None
             if words and words[0] == command:
                 return Completed(argv, returncode, b"", stderr)
             return None

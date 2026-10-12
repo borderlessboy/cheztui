@@ -1,6 +1,6 @@
 {
   "name": "cheztui",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Agent skill for cheztui: make safe, previewed edits to chezmoi-managed dotfiles from Claude Code.",
   "author": {
     "name": "John Foland",
